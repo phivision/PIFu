@@ -5,6 +5,8 @@ import numpy as np
 from lib.renderer.mesh import load_obj_mesh, compute_tangent, compute_normal, load_obj_mesh_mtl
 from lib.renderer.camera import Camera
 import os
+import glob
+import click
 import cv2
 import time
 import math
@@ -12,6 +14,10 @@ import random
 import pyexr
 import argparse
 from tqdm import tqdm
+
+# render parameter
+RENDER_HEIGHT = 384
+RENDER_WIDTH = 512
 
 
 def make_rotate(rx, ry, rz):
@@ -144,15 +150,16 @@ def rotateBand2(x, R):
 
     return dst
 
-def render_prt_ortho(out_path, folder_name, subject_name, shs, rndr, rndr_uv, im_size, angl_step=4, n_light=1, pitch=[0]):
-    cam = Camera(width=im_size, height=im_size)
-    cam.ortho_ratio = 0.4 * (512 / im_size)
+
+def render_prt_ortho(out_path, folder_name, subject_name, shs, rndr, rndr_uv, angl_step=4, n_light=1, pitch=[0]):
+    cam = Camera(width=RENDER_WIDTH, height=RENDER_HEIGHT)
+    cam.ortho_ratio = 0.4 * (512 / RENDER_HEIGHT)
     cam.near = -100
     cam.far = 100
     cam.sanity_check()
 
     # set path for obj, prt
-    mesh_file = os.path.join(folder_name, subject_name + '_100k.obj')
+    mesh_file = os.path.join(folder_name, subject_name + '.obj')
     if not os.path.exists(mesh_file):
         print('ERROR: obj file does not exist!!', mesh_file)
         return 
@@ -164,10 +171,11 @@ def render_prt_ortho(out_path, folder_name, subject_name, shs, rndr, rndr_uv, im
     if not os.path.exists(face_prt_file):
         print('ERROR: face prt file does not exist!!!', prt_file)
         return
-    text_file = os.path.join(folder_name, 'tex', subject_name + '_dif_2k.jpg')
-    if not os.path.exists(text_file):
-        print('ERROR: dif file does not exist!!', text_file)
-        return             
+    text_files = glob.glob(os.path.join(folder_name, subject_name, '*.jpg'))
+    if not text_files:
+        print('ERROR: dif file does not exist!!', folder_name)
+        return
+    text_file = text_files[0]
 
     texture_image = cv2.imread(text_file)
     texture_image = cv2.cvtColor(texture_image, cv2.COLOR_BGR2RGB)
@@ -265,26 +273,28 @@ def render_prt_ortho(out_path, folder_name, subject_name, shs, rndr, rndr_uv, im
                     cv2.imwrite(os.path.join(out_path, 'UV_NORMAL', subject_name, '00.png'),255.0*uv_nml)
 
 
-if __name__ == '__main__':
-    shs = np.load('./env_sh.npy')
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input', type=str, default='/home/shunsuke/Downloads/rp_dennis_posed_004_OBJ')
-    parser.add_argument('-o', '--out_dir', type=str, default='/home/shunsuke/Documents/hf_human')
-    parser.add_argument('-m', '--ms_rate', type=int, default=1, help='higher ms rate results in less aliased output. MESA renderer only supports ms_rate=1.')
-    parser.add_argument('-e', '--egl',  action='store_true', help='egl rendering option. use this when rendering with headless server with NVIDIA GPU')
-    parser.add_argument('-s', '--size',  type=int, default=512, help='rendering image size')
-    args = parser.parse_args()
-
+@click.command()
+@click.option('-i', '--input_dir', type=str, default='/home/fanghao/Documents/3D_models')
+@click.option('-o', '--output_dir', type=str, default='/home/fanghao/Documents/training_data')
+@click.option('-m', '--ms_rate', type=int, default=1,
+                    help='higher ms rate results in less aliased output. MESA renderer only supports ms_rate=1.')
+@click.option('-e', '--egl/--no-egl', default=False,
+                    help='egl rendering option. use this when rendering with headless server with NVIDIA GPU')
+def render_main(input_dir, output_dir, ms_rate, egl):
+    os.chdir(os.getcwd())
+    shs = np.load('../env_sh.npy')
     # NOTE: GL context has to be created before any other OpenGL function loads.
     from lib.renderer.gl.init_gl import initialize_GL_context
-    initialize_GL_context(width=args.size, height=args.size, egl=args.egl)
-
+    initialize_GL_context(width=RENDER_WIDTH, height=RENDER_HEIGHT, egl=egl)
     from lib.renderer.gl.prt_render import PRTRender
-    rndr = PRTRender(width=args.size, height=args.size, ms_rate=args.ms_rate, egl=args.egl)
-    rndr_uv = PRTRender(width=args.size, height=args.size, uv_mode=True, egl=args.egl)
+    render = PRTRender(width=RENDER_WIDTH, height=RENDER_HEIGHT, ms_rate=ms_rate, egl=egl)
+    render_uv = PRTRender(width=RENDER_WIDTH, height=RENDER_HEIGHT, uv_mode=True, egl=egl)
+    for obj_dir in os.scandir(input_dir):
+        if obj_dir.is_dir():
+            subject_name = os.path.basename(obj_dir)
+            output_path = os.path.join(output_dir, subject_name)
+            render_prt_ortho(output_path, obj_dir, subject_name, shs, render, render_uv, 1, 1, pitch=[0])
 
-    if args.input[-1] == '/':
-        args.input = args.input[:-1]
-    subject_name = args.input.split('/')[-1][:-4]
-    render_prt_ortho(args.out_dir, args.input, subject_name, shs, rndr, rndr_uv, args.size, 1, 1, pitch=[0])
+
+if __name__ == '__main__':
+    render_main()
