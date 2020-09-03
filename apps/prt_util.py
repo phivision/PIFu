@@ -1,9 +1,10 @@
-import glob
 import os
+from multiprocessing import Pool
 import trimesh
 import numpy as np
 import math
 import click
+from functools import partial
 from scipy.special import sph_harm
 from tqdm import tqdm
 
@@ -93,8 +94,9 @@ def getSHCoeffs(order, phi, theta):
     return np.stack(shs, 1)
 
 
-def computePRT(mesh_path, n, order):
-    mesh = trimesh.load(mesh_path, process=False).convex_hull
+def computePRT(mesh_path, n, order, label=None):
+    # force the obj as mesh file if loaded as scene
+    mesh = trimesh.load(mesh_path, process=False, force='mesh')
     vectors, phi, theta = sampleSphericalDirections(n)
     SH = getSHCoeffs(order, phi, theta)
 
@@ -107,7 +109,9 @@ def computePRT(mesh_path, n, order):
     origins = np.repeat(origins[:, None], n, axis=1).reshape(-1, 3)
     normals = np.repeat(normals[:, None], n, axis=1).reshape(-1, 3)
     PRT_all = None
-    for i in tqdm(range(n)):
+    pbar = tqdm(range(n))
+    for i in pbar:
+        pbar.set_description(f"Processing {label}")
         SH = np.repeat(SH[None, (i * n):((i + 1) * n)], n_v, axis=0).reshape(-1, SH.shape[1])
         vectors = np.repeat(vectors[None, (i * n):((i + 1) * n)], n_v, axis=0).reshape(-1, 3)
 
@@ -132,19 +136,27 @@ def computePRT(mesh_path, n, order):
     return PRT, mesh.faces
 
 
+def obj_process(obj_name, input_dir, n):
+    obj_dir = os.path.join(input_dir, obj_name)
+    obj_path = os.path.join(obj_dir, obj_name + '.obj')
+    os.makedirs(os.path.join(obj_dir, 'bounce'), exist_ok=True)
+    PRT, F = computePRT(obj_path, n, 2, obj_name)
+    np.savetxt(os.path.join(obj_dir, 'bounce', 'bounce0.txt'), PRT, fmt='%.8f')
+    np.save(os.path.join(obj_dir, 'bounce', 'face.npy'), F)
+
+
 @click.command()
 @click.option('-i', '--input_dir', default='/home/fanghao/Documents/3D_models')
 @click.option('-n', '--n_sample', default=40,
               help='squared root of number of sampling. the higher, the more accurate, but slower')
 def ptr_main(input_dir, n_sample):
+    process_pram = []
     for obj_dir in os.scandir(input_dir):
         if obj_dir.is_dir():
             obj_name = os.path.basename(obj_dir)
-            obj_path = os.path.join(obj_dir, obj_name + '.obj')
-            os.makedirs(os.path.join(obj_dir, 'bounce'), exist_ok=True)
-            PRT, F = computePRT(obj_path, n_sample, 2)
-            np.savetxt(os.path.join(obj_dir, 'bounce', 'bounce0.txt'), PRT, fmt='%.8f')
-            np.save(os.path.join(obj_dir, 'bounce', 'face.npy'), F)
+            process_pram.append(obj_name)
+    with Pool(20) as cpu_pool:
+        cpu_pool.map(partial(obj_process, input_dir=input_dir, n=n_sample), process_pram)
 
 
 if __name__ == '__main__':
