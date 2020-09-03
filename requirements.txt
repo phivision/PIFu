@@ -25,3 +25,4 @@ xxhash>=1.4.3
 ipython~=7.18.1
 pytorch3d~=0.2.5
 click~=7.1.2
+pyexr~=0.3.8

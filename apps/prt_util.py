@@ -133,8 +133,8 @@ def computePRT(mesh_path, n, order):
 
 
 @click.command()
-@click.option('--input_dir', default='/home/fanghao/Documents/3D_models')
-@click.option('--n_sample', default=40,
+@click.option('-i', '--input_dir', default='/home/fanghao/Documents/3D_models')
+@click.option('-n', '--n_sample', default=40,
               help='squared root of number of sampling. the higher, the more accurate, but slower')
 def ptr_main(input_dir, n_sample):
     for obj_dir in os.scandir(input_dir):
