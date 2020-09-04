@@ -52,8 +52,6 @@ class HGPIFuNet(BasePIFuNet):
 
         self.intermediate_preds_list = []
 
-        init_net(self)
-
     def filter(self, images):
         '''
         Filter the input images

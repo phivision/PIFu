@@ -150,13 +150,13 @@ def obj_process(obj_name, input_dir, n):
 @click.option('-n', '--n_sample', default=40,
               help='squared root of number of sampling. the higher, the more accurate, but slower')
 def ptr_main(input_dir, n_sample):
-    process_pram = []
+    obj_list = []
     for obj_dir in os.scandir(input_dir):
         if obj_dir.is_dir():
             obj_name = os.path.basename(obj_dir)
-            process_pram.append(obj_name)
+            obj_list.append(obj_name)
     with Pool(20) as cpu_pool:
-        cpu_pool.map(partial(obj_process, input_dir=input_dir, n=n_sample), process_pram)
+        cpu_pool.map(partial(obj_process, input_dir=input_dir, n=n_sample), obj_list)
 
 
 if __name__ == '__main__':

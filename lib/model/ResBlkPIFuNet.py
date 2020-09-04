@@ -87,6 +87,7 @@ class ResBlkPIFuNet(BasePIFuNet):
 
         return res, error
 
+
 class ResnetBlock(nn.Module):
     """Define a Resnet block"""
 

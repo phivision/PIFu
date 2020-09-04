@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from lib.options import BaseOptions
+from lib.net_util import init_net
 from lib.mesh_util import *
 from lib.sample_util import *
 from lib.train_util import *
@@ -23,6 +24,7 @@ from lib.geometry import index
 
 # get options
 opt = BaseOptions().parse()
+
 
 def train(opt):
     # set cuda
@@ -47,10 +49,13 @@ def train(opt):
     print('test data size: ', len(test_data_loader))
 
     # create net
-    netG = HGPIFuNet(opt, projection_mode).to(device=cuda)
+    netG = HGPIFuNet(opt, projection_mode)
+    print('Using Network: ', netG.name)
+    gpu_ids = [int(i) for i in opt.gpu_ids.split(',')]
+    netG = init_net(netG, gpu_ids=gpu_ids)
+    netG.to(device=cuda)
     optimizerG = torch.optim.RMSprop(netG.parameters(), lr=opt.learning_rate, momentum=0, weight_decay=0)
     lr = opt.learning_rate
-    print('Using Network: ', netG.name)
     
     def set_train():
         netG.train()

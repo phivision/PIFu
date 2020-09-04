@@ -9,18 +9,21 @@ import torch
 from PIL.ImageFilter import GaussianBlur
 import trimesh
 import logging
+from apps.render_data import ANGLE_STEP
 
 log = logging.getLogger('trimesh')
 log.setLevel(40)
+
 
 def load_trimesh(root_dir):
     folders = os.listdir(root_dir)
     meshs = {}
     for i, f in enumerate(folders):
         sub_name = f
-        meshs[sub_name] = trimesh.load(os.path.join(root_dir, f, '%s_100k.obj' % sub_name))
+        meshs[sub_name] = trimesh.load(os.path.join(root_dir, f, '%s.obj' % sub_name), force='mesh')
 
     return meshs
+
 
 def save_samples_truncted_prob(fname, points, prob):
     '''
@@ -78,7 +81,7 @@ class TrainDataset(Dataset):
         self.num_sample_inout = self.opt.num_sample_inout
         self.num_sample_color = self.opt.num_sample_color
 
-        self.yaw_list = list(range(0,360,1))
+        self.yaw_list = list(range(0, 360, ANGLE_STEP))
         self.pitch_list = [0]
         self.subjects = self.get_subjects()
 
