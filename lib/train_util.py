@@ -70,6 +70,7 @@ def gen_mesh(opt, net, cuda, data, save_path, use_octree=True):
         print(e)
         print('Can not create marching cubes at this time.')
 
+
 def gen_mesh_color(opt, netG, netC, cuda, data, save_path, use_octree=True):
     image_tensor = data['img'].to(device=cuda)
     calib_tensor = data['calib'].to(device=cuda)
@@ -110,6 +111,7 @@ def gen_mesh_color(opt, netG, netC, cuda, data, save_path, use_octree=True):
     except Exception as e:
         print(e)
         print('Can not create marching cubes at this time.')
+
 
 def adjust_learning_rate(optimizer, epoch, lr, schedule, gamma):
     """Sets the learning rate to the initial LR decayed by schedule"""
@@ -174,6 +176,7 @@ def calc_error(opt, net, cuda, dataset, num_tests):
             recall_arr.append(recall.item())
 
     return np.average(erorr_arr), np.average(IOU_arr), np.average(prec_arr), np.average(recall_arr)
+
 
 def calc_error_color(opt, netG, netC, cuda, dataset, num_tests):
     if num_tests > len(dataset):

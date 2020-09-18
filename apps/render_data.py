@@ -1,8 +1,8 @@
 #from data.config import raw_dataset, render_dataset, archive_dataset, model_list, zip_path
-
+from shutil import copyfile
 from lib.renderer.camera import Camera
 import numpy as np
-from lib.renderer.mesh import load_obj_mesh, compute_tangent, compute_normal, load_obj_mesh_mtl
+from lib.renderer.mesh import load_obj_mesh, compute_tangent, save_obj_mesh
 from lib.renderer.camera import Camera
 from functools import partial
 from multiprocessing import Pool
@@ -20,7 +20,7 @@ from tqdm import tqdm
 # render parameter
 RENDER_HEIGHT = 512
 RENDER_WIDTH = 512
-ANGLE_STEP = 2
+ANGLE_STEP = 1
 
 def make_rotate(rx, ry, rz):
     sinX = np.sin(rx)
@@ -220,10 +220,10 @@ def render_prt_ortho(subject_name,
         f = open(os.path.join(out_path, 'val.txt'), 'w')
         f.close()
 
-    # copy obj file
-    cmd = 'cp %s %s' % (mesh_file, os.path.join(out_path, 'GEO', 'OBJ', subject_name))
-    print(cmd)
-    os.system(cmd)
+    # if unit is centimeter, copy obj file, otherwise convert the unit to meter
+    obj_dst = os.path.join(out_path, 'GEO', 'OBJ', subject_name, os.path.basename(mesh_file))
+    copyfile(mesh_file, obj_dst)
+    print(f"copy obj file to {obj_dst}")
 
     for p in pitch:
         for y in tqdm(range(0, 360, angl_step)):

@@ -110,7 +110,7 @@ def train(opt):
             res, error = netG.forward(image_tensor, sample_tensor, calib_tensor, labels=label_tensor)
 
             optimizerG.zero_grad()
-            error.backward()
+            error.mean().backward()
             optimizerG.step()
 
             iter_net_time = time.time()
@@ -120,7 +120,7 @@ def train(opt):
             if train_idx % opt.freq_plot == 0:
                 print(
                     'Name: {0} | Epoch: {1} | {2}/{3} | Err: {4:.06f} | LR: {5:.06f} | Sigma: {6:.02f} | dataT: {7:.05f} | netT: {8:.05f} | ETA: {9:02d}:{10:02d}'.format(
-                        opt.name, epoch, train_idx, len(train_data_loader), error.item(), lr, opt.sigma,
+                        opt.name, epoch, train_idx, len(train_data_loader), error.mean().item(), lr, opt.sigma,
                                                                             iter_start_time - iter_data_time,
                                                                             iter_net_time - iter_start_time, int(eta // 60),
                         int(eta - 60 * (eta // 60))))
@@ -140,7 +140,7 @@ def train(opt):
         # update learning rate
         lr = adjust_learning_rate(optimizerG, epoch, lr, opt.schedule, opt.gamma)
 
-        #### test
+        # test
         with torch.no_grad():
             set_eval()
 
@@ -172,7 +172,7 @@ def train(opt):
                     test_data = random.choice(test_dataset)
                     save_path = '%s/%s/test_eval_epoch%d_%s.obj' % (
                         opt.results_path, opt.name, epoch, test_data['name'])
-                    gen_mesh(opt, netG, cuda, test_data, save_path)
+                    gen_mesh(opt, netG.module, cuda, test_data, save_path)
 
                 print('generate mesh (train) ...')
                 train_dataset.is_train = False
@@ -180,7 +180,7 @@ def train(opt):
                     train_data = random.choice(train_dataset)
                     save_path = '%s/%s/train_eval_epoch%d_%s.obj' % (
                         opt.results_path, opt.name, epoch, train_data['name'])
-                    gen_mesh(opt, netG, cuda, train_data, save_path)
+                    gen_mesh(opt, netG.module, cuda, train_data, save_path)
                 train_dataset.is_train = True
 
 
