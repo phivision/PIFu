@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from lib.options import BaseOptions
+from lib.net_util import init_net
 from lib.mesh_util import *
 from lib.sample_util import *
 from lib.train_util import *
@@ -48,12 +49,17 @@ def train_color(opt):
     print('test data size: ', len(test_data_loader))
 
     # create net
-    netG = HGPIFuNet(opt, projection_mode).to(device=cuda)
-
+    netG = HGPIFuNet(opt, projection_mode)
+    print('Using Network: ', netG.name)
+    gpu_ids = [int(i) for i in opt.gpu_ids.split(',')]
+    netG = init_net(netG, gpu_ids=gpu_ids)
+    netG.to(device=cuda)
     lr = opt.learning_rate
 
     # Always use resnet for color regression
-    netC = ResBlkPIFuNet(opt).to(device=cuda)
+    netC = ResBlkPIFuNet(opt)
+    netC = torch.nn.DataParallel(netC, gpu_ids)
+    netC.to(device=cuda)
     optimizerC = torch.optim.Adam(netC.parameters(), lr=opt.learning_rate)
 
     def set_train():
@@ -64,7 +70,7 @@ def train_color(opt):
         netG.eval()
         netC.eval()
 
-    print('Using NetworkG: ', netG.name, 'networkC: ', netC.name)
+    print('Using NetworkG: ', netG.module.name, 'networkC: ', netC.module.name)
 
     # load checkpoints
     if opt.load_netG_checkpoint_path is not None:
@@ -119,11 +125,11 @@ def train_color(opt):
             rgb_tensor = train_data['rgbs'].to(device=cuda)
 
             with torch.no_grad():
-                netG.filter(image_tensor)
-            resC, error = netC.forward(image_tensor, netG.get_im_feat(), color_sample_tensor, calib_tensor, labels=rgb_tensor)
+                netG.module.filter(image_tensor)
+            resC, error = netC.forward(image_tensor, netG.module.get_im_feat(), color_sample_tensor, calib_tensor, labels=rgb_tensor)
 
             optimizerC.zero_grad()
-            error.backward()
+            error.mean().backward()
             optimizerC.step()
 
             iter_net_time = time.time()
@@ -134,7 +140,7 @@ def train_color(opt):
                 print(
                     'Name: {0} | Epoch: {1} | {2}/{3} | Err: {4:.06f} | LR: {5:.06f} | dataT: {6:.05f} | netT: {7:.05f} | ETA: {8:02d}:{9:02d}'.format(
                         opt.name, epoch, train_idx, len(train_data_loader),
-                        error.item(),
+                        error.mean().item(),
                         lr,
                         iter_start_time - iter_data_time,
                         iter_net_time - iter_start_time, int(eta // 60),
@@ -152,20 +158,20 @@ def train_color(opt):
 
             iter_data_time = time.time()
 
-        #### test
+        # test
         with torch.no_grad():
             set_eval()
 
             if not opt.no_num_eval:
                 test_losses = {}
                 print('calc error (test) ...')
-                test_color_error = calc_error_color(opt, netG, netC, cuda, test_dataset, 100)
+                test_color_error = calc_error_color(opt, netG.module, netC.module, cuda, test_dataset, 100)
                 print('eval test | color error:', test_color_error)
                 test_losses['test_color'] = test_color_error
 
                 print('calc error (train) ...')
                 train_dataset.is_train = False
-                train_color_error = calc_error_color(opt, netG, netC, cuda, train_dataset, 100)
+                train_color_error = calc_error_color(opt, netG.module, netC.module, cuda, train_dataset, 100)
                 train_dataset.is_train = True
                 print('eval train | color error:', train_color_error)
                 test_losses['train_color'] = train_color_error
@@ -176,7 +182,7 @@ def train_color(opt):
                     test_data = random.choice(test_dataset)
                     save_path = '%s/%s/test_eval_epoch%d_%s.obj' % (
                         opt.results_path, opt.name, epoch, test_data['name'])
-                    gen_mesh_color(opt, netG, netC, cuda, test_data, save_path)
+                    gen_mesh_color(opt, netG.module, netC.module, cuda, test_data, save_path)
 
                 print('generate mesh (train) ...')
                 train_dataset.is_train = False
@@ -184,8 +190,9 @@ def train_color(opt):
                     train_data = random.choice(train_dataset)
                     save_path = '%s/%s/train_eval_epoch%d_%s.obj' % (
                         opt.results_path, opt.name, epoch, train_data['name'])
-                    gen_mesh_color(opt, netG, netC, cuda, train_data, save_path)
+                    gen_mesh_color(opt, netG.module, netC.module, cuda, train_data, save_path)
                 train_dataset.is_train = True
+
 
 if __name__ == '__main__':
     train_color(opt)

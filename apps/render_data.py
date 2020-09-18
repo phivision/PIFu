@@ -1,9 +1,11 @@
 #from data.config import raw_dataset, render_dataset, archive_dataset, model_list, zip_path
-
+from shutil import copyfile
 from lib.renderer.camera import Camera
 import numpy as np
-from lib.renderer.mesh import load_obj_mesh, compute_tangent, compute_normal, load_obj_mesh_mtl
+from lib.renderer.mesh import load_obj_mesh, compute_tangent, save_obj_mesh
 from lib.renderer.camera import Camera
+from functools import partial
+from multiprocessing import Pool
 import os
 import glob
 import click
@@ -16,9 +18,9 @@ import argparse
 from tqdm import tqdm
 
 # render parameter
-RENDER_HEIGHT = 384
+RENDER_HEIGHT = 512
 RENDER_WIDTH = 512
-
+ANGLE_STEP = 1
 
 def make_rotate(rx, ry, rz):
     sinX = np.sin(rx)
@@ -151,7 +153,10 @@ def rotateBand2(x, R):
     return dst
 
 
-def render_prt_ortho(out_path, folder_name, subject_name, shs, rndr, rndr_uv, angl_step=4, n_light=1, pitch=[0]):
+def render_prt_ortho(subject_name,
+                     out_path,
+                     input_path,
+                     shs, rndr, rndr_uv, angl_step=ANGLE_STEP, n_light=1, pitch=[0]):
     cam = Camera(width=RENDER_WIDTH, height=RENDER_HEIGHT)
     cam.ortho_ratio = 0.4 * (512 / RENDER_HEIGHT)
     cam.near = -100
@@ -159,6 +164,7 @@ def render_prt_ortho(out_path, folder_name, subject_name, shs, rndr, rndr_uv, an
     cam.sanity_check()
 
     # set path for obj, prt
+    folder_name = os.path.join(input_path, subject_name)
     mesh_file = os.path.join(folder_name, subject_name + '.obj')
     if not os.path.exists(mesh_file):
         print('ERROR: obj file does not exist!!', mesh_file)
@@ -214,10 +220,10 @@ def render_prt_ortho(out_path, folder_name, subject_name, shs, rndr, rndr_uv, an
         f = open(os.path.join(out_path, 'val.txt'), 'w')
         f.close()
 
-    # copy obj file
-    cmd = 'cp %s %s' % (mesh_file, os.path.join(out_path, 'GEO', 'OBJ', subject_name))
-    print(cmd)
-    os.system(cmd)
+    # if unit is centimeter, copy obj file, otherwise convert the unit to meter
+    obj_dst = os.path.join(out_path, 'GEO', 'OBJ', subject_name, os.path.basename(mesh_file))
+    copyfile(mesh_file, obj_dst)
+    print(f"copy obj file to {obj_dst}")
 
     for p in pitch:
         for y in tqdm(range(0, 360, angl_step)):
@@ -292,8 +298,7 @@ def render_main(input_dir, output_dir, ms_rate, egl):
     for obj_dir in os.scandir(input_dir):
         if obj_dir.is_dir():
             subject_name = os.path.basename(obj_dir)
-            output_path = os.path.join(output_dir, subject_name)
-            render_prt_ortho(output_path, obj_dir, subject_name, shs, render, render_uv, 1, 1, pitch=[0])
+            render_prt_ortho(subject_name, output_dir, input_dir, shs, render, render_uv)
 
 
 if __name__ == '__main__':

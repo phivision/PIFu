@@ -9,18 +9,21 @@ import torch
 from PIL.ImageFilter import GaussianBlur
 import trimesh
 import logging
+from apps.render_data import ANGLE_STEP
 
 log = logging.getLogger('trimesh')
 log.setLevel(40)
+
 
 def load_trimesh(root_dir):
     folders = os.listdir(root_dir)
     meshs = {}
     for i, f in enumerate(folders):
         sub_name = f
-        meshs[sub_name] = trimesh.load(os.path.join(root_dir, f, '%s_100k.obj' % sub_name))
+        meshs[sub_name] = trimesh.load(os.path.join(root_dir, f, '%s.obj' % sub_name), force='mesh')
 
     return meshs
+
 
 def save_samples_truncted_prob(fname, points, prob):
     '''
@@ -78,7 +81,7 @@ class TrainDataset(Dataset):
         self.num_sample_inout = self.opt.num_sample_inout
         self.num_sample_color = self.opt.num_sample_color
 
-        self.yaw_list = list(range(0,360,1))
+        self.yaw_list = list(range(0, 360, ANGLE_STEP))
         self.pitch_list = [0]
         self.subjects = self.get_subjects()
 
@@ -96,6 +99,9 @@ class TrainDataset(Dataset):
         ])
 
         self.mesh_dic = load_trimesh(self.OBJ)
+
+        # scales for different subject
+        self.scales = {}
 
     def get_subjects(self):
         all_subjects = os.listdir(self.RENDER)
@@ -147,6 +153,7 @@ class TrainDataset(Dataset):
             ortho_ratio = param.item().get('ortho_ratio')
             # world unit / model unit
             scale = param.item().get('scale')
+            self.scales[subject] = scale
             # camera center world coordinate
             center = param.item().get('center')
             # model rotation
@@ -241,7 +248,9 @@ class TrainDataset(Dataset):
             'img': torch.stack(render_list, dim=0),
             'calib': torch.stack(calib_list, dim=0),
             'extrinsic': torch.stack(extrinsic_list, dim=0),
-            'mask': torch.stack(mask_list, dim=0)
+            'mask': torch.stack(mask_list, dim=0),
+            'b_min': self.B_MIN / self.scales[subject],
+            'b_max': self.B_MAX / self.scales[subject],
         }
 
     def select_sampling_method(self, subject):
@@ -251,11 +260,13 @@ class TrainDataset(Dataset):
             torch.manual_seed(1991)
         mesh = self.mesh_dic[subject]
         surface_points, _ = trimesh.sample.sample_surface(mesh, 4 * self.num_sample_inout)
-        sample_points = surface_points + np.random.normal(scale=self.opt.sigma, size=surface_points.shape)
+        scale = self.scales[subject]
+        # the fake sampling noise is rescaled based on the scale of model
+        sample_points = surface_points + np.random.normal(scale=self.opt.sigma / scale, size=surface_points.shape)
 
         # add random points within image space
-        length = self.B_MAX - self.B_MIN
-        random_points = np.random.rand(self.num_sample_inout // 4, 3) * length + self.B_MIN
+        length = (self.B_MAX - self.B_MIN) / scale
+        random_points = np.random.rand(self.num_sample_inout // 4, 3) * length + self.B_MIN / scale
         sample_points = np.concatenate([sample_points, random_points], 0)
         np.random.shuffle(sample_points)
 
@@ -285,7 +296,6 @@ class TrainDataset(Dataset):
             'samples': samples,
             'labels': labels
         }
-
 
     def get_color_sampling(self, subject, yid, pid=0):
         yaw = self.yaw_list[yid]
@@ -329,9 +339,10 @@ class TrainDataset(Dataset):
             surface_normal = surface_normal[sample_list].T
 
         # Samples are around the true surface with an offset
+        scale = self.scales[subject]
         normal = torch.Tensor(surface_normal).float()
-        samples = torch.Tensor(surface_points).float() \
-                  + torch.normal(mean=torch.zeros((1, normal.size(1))), std=self.opt.sigma).expand_as(normal) * normal
+        samples = torch.Tensor(surface_points).float() + \
+            torch.normal(mean=torch.zeros((1, normal.size(1))), std=self.opt.sigma / scale).expand_as(normal) * normal
 
         # Normalized to [-1, 1]
         rgbs_color = 2.0 * torch.Tensor(surface_colors).float() - 1.0

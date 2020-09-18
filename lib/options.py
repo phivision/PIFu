@@ -106,10 +106,12 @@ class BaseOptions():
                             help='how many meshes to generate during testing')
 
         # path
-        parser.add_argument('--checkpoints_path', type=str, default='./checkpoints', help='path to save checkpoints')
+        parser.add_argument('--checkpoints_path', type=str, default='/home/fanghao/Documents/PIFu/checkpoints',
+                            help='path to save checkpoints')
         parser.add_argument('--load_netG_checkpoint_path', type=str, default=None, help='path to save checkpoints')
         parser.add_argument('--load_netC_checkpoint_path', type=str, default=None, help='path to save checkpoints')
-        parser.add_argument('--results_path', type=str, default='./results', help='path to save results ply')
+        parser.add_argument('--results_path', type=str, default='/home/fanghao/Documents/PIFu/results',
+                            help='path to save results ply')
         parser.add_argument('--load_checkpoint_path', type=str, help='path to save results ply')
         parser.add_argument('--single', type=str, default='', help='single data for training')
         # for single image reconstruction
