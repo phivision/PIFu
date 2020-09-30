@@ -124,7 +124,19 @@ class HGPIFuNet(BasePIFuNet):
         
         return error
 
-    def forward(self, images, points, calibs, transforms=None, labels=None):
+    def forward(self, images, points, calibs, labels=None, transforms=None):
+        """nn forward
+        note: the argument order of labels and transforms were changed to unwrap arguments in model conversion
+        Args:
+            images:
+            points:
+            calibs:
+            labels:
+            transforms:
+
+        Returns:
+
+        """
         # Get image feature
         self.filter(images)
 

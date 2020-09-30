@@ -17,6 +17,7 @@ from lib.train_util import *
 from lib.model import *
 
 from PIL import Image
+from PIL import ImageFilter
 from collections import OrderedDict
 import torchvision.transforms as transforms
 import glob
@@ -26,6 +27,16 @@ import tqdm
 opt = BaseOptions().parse()
 # default size
 DEFAULT_SIZE = 512, 512
+
+
+def load_model(model_path, map_location):
+    state_dict = torch.load(model_path, map_location=map_location)
+    new_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k[7:]  # remove 'module' for parallel data models
+        new_dict[name] = v
+    return new_dict
+
 
 class Evaluator:
     def __init__(self, opt, projection_mode='orthogonal'):
@@ -44,22 +55,12 @@ class Evaluator:
         print('Using Network: ', netG.name)
 
         if opt.load_netG_checkpoint_path:
-            state_dict = torch.load(opt.load_netG_checkpoint_path, map_location=cuda)
-            new_dict = OrderedDict()
-            for k, v in state_dict.items():
-                name = k[7:]  # remove 'module' for parallel data models
-                new_dict[name] = v
-            netG.load_state_dict(new_dict)
+            netG.load_state_dict(load_model(opt.load_netG_checkpoint_path, cuda))
 
         if opt.load_netC_checkpoint_path is not None:
             print('loading for net C ...', opt.load_netC_checkpoint_path)
             netC = ResBlkPIFuNet(opt).to(device=cuda)
-            state_dict = torch.load(opt.load_netC_checkpoint_path, map_location=cuda)
-            new_dict = OrderedDict()
-            for k, v in state_dict.items():
-                name = k[7:]  # remove 'module' for parallel data models
-                new_dict[name] = v
-            netC.load_state_dict(new_dict)
+            netC.load_state_dict(load_model(opt.load_netC_checkpoint_path, cuda))
         else:
             netC = None
 
@@ -89,7 +90,12 @@ class Evaluator:
         if mask_path:
             mask = Image.open(mask_path).convert('L')
         else:
-            mask = Image.open(image_path).convert('L').point(lambda x: 0 if x < 10 else 255, '1')
+            mask = Image.open(image_path).convert('L').point(lambda x: 0 if x < 3 else 255, '1')
+            kernel_size = 3
+            # dilate mask to fill in small voids
+            mask = mask.filter(ImageFilter.MaxFilter(kernel_size))
+            # erode mask to restore original size
+            mask = mask.filter(ImageFilter.MinFilter(kernel_size))
             mask.save(os.path.join(file_dir, subject_name+'_gen_mask.png'))
         if mask.size != DEFAULT_SIZE:
             mask = self.resize_image(mask, DEFAULT_SIZE,

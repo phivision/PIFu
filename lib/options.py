@@ -127,6 +127,11 @@ class BaseOptions():
         group_aug.add_argument('--aug_hue', type=float, default=0.0, help='augmentation hue')
         group_aug.add_argument('--aug_blur', type=float, default=0.0, help='augmentation blur')
 
+        # export
+        parser.add_argument('--export_onnx_path', type=str, default='/home/fanghao/Documents/PIFu/results/',
+                            help='path to save onnx model')
+        parser.add_argument('--export_coreml_path', type=str, default='/home/fanghao/Documents/PIFu/results/',
+                            help='path to save onnx model')
         # special tasks
         self.initialized = True
         return parser

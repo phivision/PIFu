@@ -35,4 +35,4 @@ CUDA_VISIBLE_DEVICES=${GPU_ID} python /home/fanghao/Documents/PIFu/apps/eval.py 
     --norm_color 'group' \
     --test_folder_path ${TEST_FOLDER_PATH} \
     --load_netG_checkpoint_path ${CHECKPOINTS_NETG_PATH} \
-#    --load_netC_checkpoint_path ${CHECKPOINTS_NETC_PATH}
+    --load_netC_checkpoint_path ${CHECKPOINTS_NETC_PATH}
